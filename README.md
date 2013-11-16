@@ -24,7 +24,7 @@ isn't possible. Consider a persistent map example:
 ```cpp
 #include "immutable"
 
-using str_str_map = immutable::unordered_map<std::string, std::string>;
+using str_str_map = immutable::map<std::string, std::string>;
 
 str_str_map phone_book {{"Bob", "555-5745"}, {"John", "555-2547"}};
 

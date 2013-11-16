@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 project(immutable)
 
+add_definitions(
+    -std=c++11
+)
+
+include_directories(${CMAKE_SOURCE_DIR}/src)
+
 ## Google test framework setup
 
 # Enable external projects
@@ -54,11 +60,9 @@ add_dependencies(unitTests googletest)
 ExternalProject_Get_Property(googletest binary_dir)
 
 set(Suffix ".a")
-set(Pthread "-pthread")
 target_link_libraries(
     unitTests
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest${Suffix}
-    ${Pthread}
 )
 
 # test
