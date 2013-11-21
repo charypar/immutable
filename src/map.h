@@ -25,45 +25,64 @@ namespace immutable
       using key_equal = Pred;
       using allocator_type = Alloc;
 
+      class node;
+      using node_ptr = shared_ptr<node>;
+
       class node {
        public:
         // virtual value_type get(size_t hash) = 0; // lookup
         // set with path copying returning updated node copy
-        virtual unique_ptr<node> set(size_t hash, value_type value) = 0;
+        virtual unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) = 0;
         // unset with path copying returning updated node copy
         // virtual unique_ptr<node> unset(size_t hash) = 0;
+
+        size_t child_order(uint32_t presence, size_t truncated_hash) {
+          // count one bits to the 'left' from the child position
+          return popcnt(presence & ((1 << (truncated_hash & 31)) - 1));
+        }
+
+       protected:
+        static size_t popcnt(size_t i) {
+          // TODO check for hardware instruction
+          i = i - ((i >> 1) & 0x55555555);
+          i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+          return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+        }
       };
+
 
       class trie_node : public node {
         const uint32_t presence;
-        const vector<shared_ptr<node>> children;
+        const vector<node_ptr> children;
 
        public:
         // empty node
-        trie_node():presence{0}, children{vector<shared_ptr<node>>(0)} {}
+        trie_node():presence{0}, children{vector<node_ptr>(0)} {}
 
-        trie_node(uint32_t presence, vector<shared_ptr<node>> children)
+        trie_node(uint32_t presence, vector<node_ptr> children)
           :presence{presence}, children{children} {}
 
         value_type get(size_t hash);
 
-        unique_ptr<node> set(size_t hash, value_type value) {
+        unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) {
           // lookup child index based
-          size_t ch_order = child_order(hash);
+          size_t ch_order = child_order(hash >> shift);
 
           // copy children
           vector<shared_ptr<node>> new_children = children;
 
-          if(child_present(hash)) {
-            new_children[ch_order] = shared_ptr<node>(children[ch_order]->set(hash >> 5, value));
-
-            assert(new_children.size());
+          if(child_present(hash >> shift)) {
+            node_ptr &child = new_children[ch_order];
+            child = node_ptr(child->set(hash, shift + 5, value, child));
 
             // return copy of self with the result of set on the child with shifted hash
-            return unique_ptr<node>(new trie_node(presence, new_children));
+            unique_ptr<node> nn(new trie_node(presence, new_children));
+
+            return nn;
           } else {
+            // child doesn't yet exist
             new_children.insert(begin(new_children) + ch_order, std::make_shared<value_node>(value));
-            uint32_t new_presence = presence | (1 << (hash & 31));
+            uint32_t new_presence = presence | (1 << ((hash >> shift) & 31));
 
             trie_node* nn = new trie_node(new_presence, new_children);
 
@@ -74,26 +93,18 @@ namespace immutable
 
         // unique_ptr<node> unset(size_t hash);
 
-        shared_ptr<node> get_child(size_t hash) {
-          return children[child_order(hash)];
+        inline size_t child_order(size_t truncated_hash) {
+          return node::child_order(presence, truncated_hash);
         }
 
-        size_t child_order(size_t hash) {
-          // count one bits to the 'left' from the child position
-          return popcnt(presence & ((1 << (hash & 31)) - 1));
+        node_ptr get_child(size_t truncated_hash) {
+          return children[child_order(truncated_hash)];
         }
 
-        inline bool child_present(size_t hash) {
-          return presence & (1 << (hash & 31));
+        inline bool child_present(size_t truncated_hash) {
+          return presence & (1 << (truncated_hash & 31));
         }
 
-       private:
-        static size_t popcnt(size_t i) {
-          // TODO check for hardware instruction
-          i = i - ((i >> 1) & 0x55555555);
-          i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
-          return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
-        }
       };
 
       class value_node : public node {
@@ -106,25 +117,32 @@ namespace immutable
           return value;
         }
 
-        unique_ptr<node> set(size_t hash, value_type v) {
-          // return new value_node with v
-          // TODO check for the same value and do nothing
-
-          // replace key
-          if (value.first == v.first)
+        unique_ptr<node> set(size_t hash, size_t shift, value_type v, node_ptr this_node) {
+          // FIXME check for the same value and do nothing
+          if (value.first == v.first) {
+            // replace key
             return unique_ptr<node>(new value_node(v));
+          } else {
+            // create a trie_node containing this value node
+            size_t truncated_hash = (hasher()(value.first) >> shift);
 
-          // different key with same hash chunk
+            uint32_t new_pres = 1 << (truncated_hash & 31);
+            vector<node_ptr> new_children {this_node};
 
-          // TODO create new trie node with this and new value_node stored
-          // based on next hash chunk
+            // FIXME this temporary node will alway get created and then copied and dropped
+            // figure out a more efficient way to do this
+            node_ptr temp_node = std::make_shared<trie_node>(new_pres, new_children);
+
+            // and recursively call set on it
+            return temp_node->set(hash, shift, v, temp_node);
+          }
         }
 
         // unique_ptr<node> unset(size_t hash);
       };
 
       map():root_node{std::make_shared<trie_node>()} {}
-      map(shared_ptr<node> root):root_node{root} {}
+      map(node_ptr root):root_node{root} {}
 
       // map public interface
 
@@ -132,14 +150,14 @@ namespace immutable
         size_t hash = hasher()(k);
         value_type value = value_type(k, v);
 
-        return map(root_node->set(hash, value));
+        return map(root_node->set(hash, 0, value, root_node));
       }
 
       mapped_type const &operator[](key_type const &k) const {
 
       }
      private:
-      shared_ptr<node> root_node;
+      node_ptr root_node;
 
     };
 }
