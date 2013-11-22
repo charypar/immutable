@@ -16,10 +16,14 @@ This becomes important in parallel processing, because concurrent writes cannot 
 The collection essentially becomes a value, the same way a number is. The trick preventing the necessity
 of copying is structural sharing, which is why all of the data structures are implemented as trees.
 
+
 ## Usage
 
-Immutable is trying to follow the standard library interface to collections closely, except for cases where that
-isn't possible. Consider a persistent map example:
+Immutable is a set of header files you can use in your project. Data stractures are trying to
+follow the standard library interface to collections closely, except for cases where that isn't
+possible.
+
+Consider a persistent map example:
 
 ```cpp
 #include "immutable"
@@ -36,6 +40,23 @@ auto updated_phone_book = phone_book.set("Dave", "555-12345");
 
 phone_book.at("Dave"); // => throws out_of_range
 updated_phone_book.at("Dave"); // => "555-123456"
+```
+
+## Run tests
+
+first generate a Makefile
+
+```
+$ mkdir build
+$ cd build
+$ cmake ..
+```
+
+then build and run unit tests with
+
+```
+$ make
+$ ./unitTests
 ```
 
 ## TODO for immutable map
