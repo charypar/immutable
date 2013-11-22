@@ -2,6 +2,7 @@
 #define IMMUTABLE_MAP_H 1
 
 #include <cassert>
+#include <memory>
 
 using std::vector;
 using std::shared_ptr;

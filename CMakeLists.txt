@@ -63,6 +63,7 @@ set(Suffix ".a")
 target_link_libraries(
     unitTests
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest${Suffix}
+    pthread
 )
 
 # test
