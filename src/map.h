@@ -207,6 +207,16 @@ namespace immutable
         return root_node->get(hash, k).second;
       }
 
+      map erase(key_type k) const {
+        size_t hash = hasher()(k);
+
+        node_ptr new_root = root_node->erase(hash, 0, k);
+        if(!new_root)
+          new_root = std::make_shared<trie_node>();
+
+        return map(new_root);
+      }
+
      private:
       node_ptr root_node;
 
