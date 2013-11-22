@@ -18,7 +18,7 @@ namespace immutable
              typename Pred = std::equal_to<Key>,
              typename Alloc = std::allocator<std::pair<const Key,T>>>
     class map {
-    public:
+     public:
       using value_type = std::pair<const Key, T>;
       using key_type = Key;
       using mapped_type = T;
@@ -35,7 +35,7 @@ namespace immutable
         // set with path copying returning updated node copy
         virtual unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) = 0;
         // unset with path copying returning updated node copy
-        // virtual unique_ptr<node> unset(size_t hash) = 0;
+        virtual unique_ptr<node> erase(size_t hash, size_t shift, key_type key) = 0;
 
         size_t child_order(uint32_t presence, size_t truncated_hash) {
           // count one bits to the 'left' from the child position
@@ -50,7 +50,6 @@ namespace immutable
           return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
         }
       };
-
 
       class trie_node : public node {
         const uint32_t presence;
@@ -99,7 +98,37 @@ namespace immutable
           }
         }
 
-        // unique_ptr<node> unset(size_t hash);
+        unique_ptr<node> erase(size_t hash, size_t shift, key_type key) {
+          if(!child_present(hash >> shift))
+            throw std::out_of_range("key not found");
+
+          // lookup child index based
+          size_t ch_order = child_order(hash >> shift);
+
+          // copy children and unset the presence bit
+          vector<shared_ptr<node>> new_children = children;
+
+          node_ptr &child = new_children[ch_order];
+          uint32_t new_presence = presence;
+
+          child = node_ptr(child->erase(hash, shift + 5, key));
+
+          if(child != nullptr) {
+            // child wasn't a deleted value_node
+            new_children[ch_order] = child;
+          } else {
+            new_children.erase(begin(new_children) + ch_order);
+            new_presence = new_presence & ~(1 << ((hash >> shift) & 31));
+
+            // TODO handle singular case!
+            /* if(new_children.size() < 2) {
+              return the child instead of new trie_node
+            } */
+          }
+
+          trie_node* nn = new trie_node(new_presence, new_children);
+          return unique_ptr<node>(nn);
+        }
 
         inline size_t child_order(size_t truncated_hash) {
           return node::child_order(presence, truncated_hash);
@@ -149,7 +178,12 @@ namespace immutable
           }
         }
 
-        // unique_ptr<node> unset(size_t hash);
+        unique_ptr<node> erase(size_t hash, size_t shift, key_type key) {
+          if(value.first != key)
+            throw std::out_of_range("key not found");
+
+          return nullptr; // will get stored in the new parent node
+        }
       };
 
       map():root_node{std::make_shared<trie_node>()} {}

@@ -4,9 +4,16 @@
 #include "gtest/gtest.h"
 #include "map.h"
 
-using ii_map = immutable::map<int, int>;
 using namespace std;
 
+struct hash_stub {
+  size_t operator()(int key) {
+    return (1 << 5) | 1;
+  }
+};
+
+using ii_map = immutable::map<int, int>;
+using ii_map_s = immutable::map<int, int, hash_stub>;
 
 TEST(trie_node, can_calculate_child_position)
 {
@@ -55,17 +62,8 @@ TEST(trie_node, can_set_value)
   ASSERT_EQ(10, val_node->get(1, 1).second);
 }
 
-struct hash_stub {
-  size_t operator()(int key) {
-    return (1 << 5) | 1;
-  }
-};
-
-using ii_map_s = immutable::map<int, int, hash_stub>;
-
 TEST(trie_node, can_set_two_values_with_same_top_level_hash)
 {
-  // TODO store a pair under a hash
   ii_map_s::node_ptr test_ptr = make_shared<ii_map_s::trie_node>();
 
   ii_map_s::value_type v1(1, 10);
@@ -105,3 +103,37 @@ TEST(trie_node, can_set_two_values_with_same_top_level_hash)
   ASSERT_EQ(2, v2n.get(2, 2).first);
   ASSERT_EQ(20, v2n.get(2, 2).second);
 }
+
+TEST(trie_node, can_erase_value_with_siblings)
+{
+  ii_map_s::node_ptr test_ptr = make_shared<ii_map_s::trie_node>();
+
+  ii_map_s::value_type v1(1, 10);
+  ii_map_s::value_type v2(2, 20);
+  ii_map_s::value_type v3(3, 30);
+
+  // hashes are chosen so that all three elements end up in a single 2nd level trie node
+  size_t h1 = (1 << 5) | 1;
+  size_t h2 = (2 << 5) | 1;
+  size_t h3 = (3 << 5) | 1;
+
+  ii_map_s::node_ptr test2 = test_ptr->set(h1, 0, v1, test_ptr);
+  ii_map_s::node_ptr test3 = test2->set(h2, 0, v2, test_ptr);
+  ii_map_s::node_ptr test4 = test3->set(h3, 0, v3, test2);
+
+  // remove first element
+  ii_map_s::node_ptr root_ptr = test4->erase(h1, 0, 1);
+
+  ii_map_s::trie_node root = *static_cast<ii_map_s::trie_node *>(root_ptr.get());
+
+  ASSERT_TRUE(root.child_present(1));
+
+  ii_map_s::node_ptr child_ptr = root.get_child(1);
+  ii_map_s::trie_node child = *static_cast<ii_map_s::trie_node *>(child_ptr.get());
+
+  ASSERT_FALSE(child.child_present(1));
+  ASSERT_TRUE(child.child_present(2));
+  ASSERT_TRUE(child.child_present(3));
+}
+
+
