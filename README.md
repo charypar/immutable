@@ -61,9 +61,9 @@ $ ./unitTests
 
 ## TODO for immutable map
 
-*  Basic ~~insert, lookup~~ and delete for unordered_map
+*  ~~Basic insert, lookup and delete for map~~
 *  Iteration support for unordered_map
-*  Full std::unordered_map interface support
+*  Full std::map interface support
 
 ## TODO for other data structures
 
