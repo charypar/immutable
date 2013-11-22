@@ -48,7 +48,7 @@ TEST(trie_node, can_set_value)
   ii_map::value_type pair(1, 10);
   size_t hash = 1;
 
-  ii_map::trie_node result_node = *static_cast<ii_map::trie_node *>(test_node_ptr->set(hash, 0, pair, test_node_ptr).release());
+  ii_map::trie_node result_node = *static_cast<ii_map::trie_node *>(test_node_ptr->set(hash, 0, pair, test_node_ptr).get());
 
   ASSERT_NE(&result_node, &test_node);
   ASSERT_FALSE(test_node.child_present(1));
@@ -74,7 +74,7 @@ TEST(trie_node, can_set_two_values_with_same_top_level_hash)
   size_t h2 = (1 << 6) | 1;
 
   ii_map_s::node_ptr test2 = test_ptr->set(h1, 0, v1, test_ptr);
-  unique_ptr<ii_map_s::node> root_ptr = test2->set(h2, 0, v2, test2);
+  ii_map_s::node_ptr root_ptr = test2->set(h2, 0, v2, test2);
   ii_map_s::trie_node root = *static_cast<ii_map_s::trie_node *>(root_ptr.get());
 
   // check that a child trie_node was created
@@ -134,6 +134,39 @@ TEST(trie_node, can_erase_value_with_siblings)
   ASSERT_FALSE(child.child_present(1));
   ASSERT_TRUE(child.child_present(2));
   ASSERT_TRUE(child.child_present(3));
+}
+
+TEST(trie_node, can_erase_value_with_a_single_sibling)
+{
+  ii_map_s::node_ptr test_ptr = make_shared<ii_map_s::trie_node>();
+
+  ii_map_s::value_type v1(1, 10);
+  ii_map_s::value_type v2(2, 20);
+  ii_map_s::value_type v3(2, 20);
+
+  // hashes are chosen so that all three elements end up in a single 2nd level trie node
+  size_t h1 = (1 << 5) | 1;
+  size_t h2 = (2 << 5) | 1;
+  size_t h3 = 2;
+
+  ii_map_s::node_ptr test2 = test_ptr->set(h1, 0, v1, test_ptr);
+  ii_map_s::node_ptr test3 = test2->set(h2, 0, v2, test_ptr);
+  ii_map_s::node_ptr test4 = test3->set(h3, 0, v3, test_ptr);
+
+  // remove first element
+  ii_map_s::node_ptr root_ptr = test4->erase(h1, 0, 1);
+
+  ii_map_s::trie_node root = *static_cast<ii_map_s::trie_node *>(root_ptr.get());
+
+  ASSERT_TRUE(root.child_present(1));
+
+  ii_map_s::node_ptr child_ptr = root.get_child(1);
+  ii_map_s::value_node child = *static_cast<ii_map_s::value_node *>(child_ptr.get());
+
+  ASSERT_TRUE(child.is_value_node());
+
+  ASSERT_EQ(2, child.get(1, 2).first);
+  ASSERT_EQ(20, child.get(1, 2).second);
 }
 
 

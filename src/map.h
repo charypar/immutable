@@ -33,13 +33,19 @@ namespace immutable
        public:
         virtual value_type get(size_t hash, key_type key) = 0; // lookup
         // set with path copying returning updated node copy
-        virtual unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) = 0;
+        virtual node_ptr set(size_t hash, size_t shift, value_type value, node_ptr this_node) = 0;
         // unset with path copying returning updated node copy
-        virtual unique_ptr<node> erase(size_t hash, size_t shift, key_type key) = 0;
+        virtual node_ptr erase(size_t hash, size_t shift, key_type key) = 0;
 
         size_t child_order(uint32_t presence, size_t truncated_hash) {
           // count one bits to the 'left' from the child position
           return popcnt(presence & ((1 << (truncated_hash & 31)) - 1));
+        }
+
+        // type check used in trie_node::erase. This feels wrong, but I can't see a better
+        // solution. If you can, I wellcome a PR!
+        virtual bool is_value_node() {
+          return false;
         }
 
        protected:
@@ -71,34 +77,30 @@ namespace immutable
           return children[ch_order]->get(hash >> 5, key);
         }
 
-        unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) {
+        node_ptr set(size_t hash, size_t shift, value_type value, node_ptr this_node) {
           // lookup child index based
           size_t ch_order = child_order(hash >> shift);
 
           // copy children
-          vector<shared_ptr<node>> new_children = children;
+          vector<node_ptr> new_children = children;
 
           if(child_present(hash >> shift)) {
             node_ptr &child = new_children[ch_order];
             child = node_ptr(child->set(hash, shift + 5, value, child));
 
             // return copy of self with the result of set on the child with shifted hash
-            unique_ptr<node> nn(new trie_node(presence, new_children));
-
-            return nn;
+            return std::make_shared<trie_node>(presence, new_children);
           } else {
             // child doesn't yet exist
             new_children.insert(begin(new_children) + ch_order, std::make_shared<value_node>(value));
             uint32_t new_presence = presence | (1 << ((hash >> shift) & 31));
 
-            trie_node* nn = new trie_node(new_presence, new_children);
-
             // return copy of self with new value node ptr as the child and updated presence
-            return unique_ptr<node>(nn);
+            return std::make_shared<trie_node>(new_presence, new_children);
           }
         }
 
-        unique_ptr<node> erase(size_t hash, size_t shift, key_type key) {
+        node_ptr erase(size_t hash, size_t shift, key_type key) {
           if(!child_present(hash >> shift))
             throw std::out_of_range("key not found");
 
@@ -106,7 +108,7 @@ namespace immutable
           size_t ch_order = child_order(hash >> shift);
 
           // copy children and unset the presence bit
-          vector<shared_ptr<node>> new_children = children;
+          vector<node_ptr> new_children = children;
 
           node_ptr &child = new_children[ch_order];
           uint32_t new_presence = presence;
@@ -114,20 +116,18 @@ namespace immutable
           child = node_ptr(child->erase(hash, shift + 5, key));
 
           if(child != nullptr) {
-            // child wasn't a deleted value_node
+            // child was updated
             new_children[ch_order] = child;
           } else {
+            // child was deleted
             new_children.erase(begin(new_children) + ch_order);
             new_presence = new_presence & ~(1 << ((hash >> shift) & 31));
-
-            // TODO handle singular case!
-            /* if(new_children.size() < 2) {
-              return the child instead of new trie_node
-            } */
           }
 
-          trie_node* nn = new trie_node(new_presence, new_children);
-          return unique_ptr<node>(nn);
+          if(new_children.size() < 2 && new_children[0]->is_value_node())
+            return new_children[0];
+
+          return std::make_shared<trie_node>(new_presence, new_children);
         }
 
         inline size_t child_order(size_t truncated_hash) {
@@ -157,7 +157,7 @@ namespace immutable
           return value;
         }
 
-        unique_ptr<node> set(size_t hash, size_t shift, value_type v, node_ptr this_node) {
+        node_ptr set(size_t hash, size_t shift, value_type v, node_ptr this_node) {
           // FIXME check for the same value and do nothing
           if (value.first == v.first) {
             // replace key
@@ -166,23 +166,27 @@ namespace immutable
             // create a trie_node containing this value node
             size_t truncated_hash = (hasher()(value.first) >> shift);
 
-            uint32_t new_pres = 1 << (truncated_hash & 31);
+            uint32_t new_presence = 1 << (truncated_hash & 31);
             vector<node_ptr> new_children {this_node};
 
-            // FIXME this temporary node will alway get created and then copied and dropped
+            // FIXME this temporary node will always get created and then copied and dropped
             // figure out a more efficient way to do this
-            node_ptr temp_node = std::make_shared<trie_node>(new_pres, new_children);
+            node_ptr temp_node = std::make_shared<trie_node>(new_presence, new_children);
 
             // and recursively call set on it
             return temp_node->set(hash, shift, v, temp_node);
           }
         }
 
-        unique_ptr<node> erase(size_t hash, size_t shift, key_type key) {
+        node_ptr erase(size_t hash, size_t shift, key_type key) {
           if(value.first != key)
-            throw std::out_of_range("key not found");
+            throw std::out_of_range("cannot erase: key not found ");
 
           return nullptr; // will get stored in the new parent node
+        }
+
+        virtual bool is_value_node() {
+          return true;
         }
       };
 
