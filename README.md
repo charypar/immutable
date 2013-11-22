@@ -28,20 +28,19 @@ using str_str_map = immutable::map<std::string, std::string>;
 
 str_str_map phone_book {{"Bob", "555-5745"}, {"John", "555-2547"}};
 
-phone_book["Bob"]; // => "555-5745", const reference
-phone_book["Bob"] = "1234"; // error
+phone_book.at("Bob"); // => "555-5745", const reference
 
 auto updated_phone_book = phone_book.set("Dave", "555-12345");
 
 &phone_book == &updated_phone_book; // => false
 
-phone_book["Dave"]; // => nullptr
-updated_phone_book["Dave"]; // => "555-123456"
+phone_book.at("Dave"); // => throws out_of_range
+updated_phone_book.at("Dave"); // => "555-123456"
 ```
 
 ## TODO for immutable map
 
-*  Basic insert, lookup and delete for unordered_map
+*  Basic ~~insert, lookup~~ and delete for unordered_map
 *  Iteration support for unordered_map
 *  Full std::unordered_map interface support
 
