@@ -51,8 +51,8 @@ TEST(trie_node, can_set_value)
 
   shared_ptr<ii_map::value_node> val_node = static_pointer_cast<ii_map::value_node>(result_node.get_child(1));
 
-  ASSERT_EQ(1, val_node->get(1).first);
-  ASSERT_EQ(10, val_node->get(1).second);
+  ASSERT_EQ(1, val_node->get(1, 1).first);
+  ASSERT_EQ(10, val_node->get(1, 1).second);
 }
 
 struct hash_stub {
@@ -99,9 +99,9 @@ TEST(trie_node, can_set_two_values_with_same_top_level_hash)
   ii_map_s::value_node v2n = *static_cast<ii_map_s::value_node *>(child.get_child(2).get());
 
   // with the correct pairs
-  ASSERT_EQ(1, v1n.get(1).first);
-  ASSERT_EQ(10, v1n.get(1).second);
+  ASSERT_EQ(1, v1n.get(1, 1).first);
+  ASSERT_EQ(10, v1n.get(1, 1).second);
 
-  ASSERT_EQ(2, v2n.get(2).first);
-  ASSERT_EQ(20, v2n.get(2).second);
+  ASSERT_EQ(2, v2n.get(2, 2).first);
+  ASSERT_EQ(20, v2n.get(2, 2).second);
 }

@@ -30,7 +30,7 @@ namespace immutable
 
       class node {
        public:
-        // virtual value_type get(size_t hash) = 0; // lookup
+        virtual value_type get(size_t hash, key_type key) = 0; // lookup
         // set with path copying returning updated node copy
         virtual unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) = 0;
         // unset with path copying returning updated node copy
@@ -62,7 +62,14 @@ namespace immutable
         trie_node(uint32_t presence, vector<node_ptr> children)
           :presence{presence}, children{children} {}
 
-        value_type get(size_t hash);
+        value_type get(size_t hash, key_type key) {
+          size_t ch_order = child_order(hash);
+
+          if(!child_present(hash))
+            throw std::out_of_range("key not found");
+
+          return children[ch_order]->get(hash >> 5, key);
+        }
 
         unique_ptr<node> set(size_t hash, size_t shift, value_type value, node_ptr this_node) {
           // lookup child index based
@@ -113,7 +120,10 @@ namespace immutable
        public:
         value_node(value_type value):value{value} {}
 
-        value_type get(size_t hash) {
+        value_type get(size_t hash, key_type key) {
+          if(value.first != key)
+            throw std::out_of_range("key not found");
+
           return value;
         }
 
@@ -153,9 +163,11 @@ namespace immutable
         return map(root_node->set(hash, 0, value, root_node));
       }
 
-      mapped_type const &operator[](key_type const &k) const {
-
+      mapped_type at(key_type k) const {
+        size_t hash = hasher()(k);
+        return root_node->get(hash, k).second;
       }
+
      private:
       node_ptr root_node;
 
