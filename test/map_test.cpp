@@ -66,3 +66,24 @@ TEST(map, can_handle_a_series_of_operations)
 
   ASSERT_THROW(result.at(1), std::out_of_range);
 }
+
+TEST(map, can_handle_a_serious_load)
+{
+  int_int_map test_map;
+
+  for(int i = 0; i < 10000; i++) {
+    test_map = test_map.set(i, 10*i);
+  }
+
+  for(int i = 0; i < 10000; i += 2) {
+    test_map = test_map.erase(i);
+  }
+
+  for(int i = 0; i < 10000; i++) {
+    if(i % 2) {
+      ASSERT_EQ(10*i, test_map.at(i));
+    } else {
+      ASSERT_THROW(test_map.at(i), std::out_of_range);
+    }
+  }
+}
