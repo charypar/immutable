@@ -49,7 +49,7 @@ namespace immutable
         }
 
        protected:
-        static size_t popcnt(size_t i) {
+        static uint32_t popcnt(uint32_t i) {
           // TODO check for hardware instruction
           i = i - ((i >> 1) & 0x55555555);
           i = (i & 0x33333333) + ((i >> 2) & 0x33333333);

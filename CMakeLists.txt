@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 project(immutable)
 
 add_definitions(
-    -std=c++11
+    -std=c++11 -g
 )
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
